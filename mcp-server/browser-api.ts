@@ -255,10 +255,16 @@ export class BrowserAPI {
   /**
    * Get structured page analysis for AI decision-making
    */
-  async getPageStructure(tabId: number): Promise<any> {
+  async getPageStructure(
+    tabId: number,
+    categories?: ("headings" | "buttons" | "inputs" | "links" | "forms")[],
+    maxElements?: number
+  ): Promise<any> {
     const correlationId = this.sendMessageToExtension({
       cmd: "get-page-structure",
-      tabId
+      tabId,
+      categories,
+      maxElements
     });
     return await this.waitForResponse(correlationId, "page-structure");
   }

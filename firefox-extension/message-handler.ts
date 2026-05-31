@@ -101,7 +101,9 @@ export class MessageHandler {
       case "get-page-structure":
         await this.getPageStructure(
           req.correlationId,
-          req.tabId
+          req.tabId,
+          req.categories,
+          req.maxElements
         );
         break;
       default:
@@ -430,7 +432,12 @@ export class MessageHandler {
    await this.client.sendSuccess(correlationId, { success: true, key });
   }
 
-  private async getPageStructure(correlationId: string, tabId: number) {
+  private async getPageStructure(
+    correlationId: string,
+    tabId: number,
+    categories?: ("headings" | "buttons" | "inputs" | "links" | "forms")[],
+    maxElements?: number
+  ) {
     const tab = await browser.tabs.get(tabId);
     if (tab.url && (await isDomainInDenyList(tab.url))) {
       throw new Error(`Domain in tab URL is in the deny list`);
@@ -451,28 +458,28 @@ export class MessageHandler {
       }
     }
 
+    const categoriesJson = JSON.stringify(categories || []);
+    const maxEl = maxElements || 100;
+
     const results = await browser.tabs.executeScript(tabId, {
       code: `
       (function() {
-        function buildSelector(el) {
-          if (!el || !el.parentElement) return '';
+        const categories = ${categoriesJson};
+        const maxEl = ${maxEl};
+        const includeAll = categories.length === 0;
+        function include(cat) { return includeAll || categories.includes(cat); }
+
+        function shortSelector(el) {
+          if (!el) return '';
           if (el.id) return '#' + el.id;
-          let path = el.tagName.toLowerCase();
-          if (el.className && typeof el.className === 'string') {
-            const classes = el.className.trim().split(/\\s+/).filter(c => c && !c.startsWith('styled__') && !c.startsWith('css-'));
-            if (classes.length > 0 && classes.length <= 3) {
-              path += '.' + classes.join('.');
-            }
-          }
-          const parent = el.parentElement;
-          if (!parent) return path;
-          const siblings = Array.from(parent.children).filter(c => c.tagName === el.tagName);
-          if (siblings.length > 1) {
-            const idx = siblings.indexOf(el) + 1;
-            path += ':nth-of-type(' + idx + ')';
-          }
-          const parentSelector = buildSelector(parent);
-          return parentSelector ? parentSelector + ' > ' + path : path;
+          let s = el.tagName.toLowerCase();
+          const name = el.getAttribute('name');
+          const type = el.getAttribute('type');
+          const role = el.getAttribute('role');
+          if (name) s += '[name="' + name + '"]';
+          else if (type) s += '[type="' + type + '"]';
+          else if (role) s += '[role="' + role + '"]';
+          return s;
         }
 
         function isVisible(el) {
@@ -481,51 +488,107 @@ export class MessageHandler {
         }
 
         function extractInteractiveElements() {
-          const selectors = 'button, a[href], input, select, textarea, [role="button"], [role="link"], [role="textbox"], [role="checkbox"], [role="radio"], [role="menuitem"], [role="tab"], [role="option"]';
-          const elements = document.querySelectorAll(selectors);
-          const result = [];
-          let index = 0;
-          for (const el of elements) {
-            if (!isVisible(el)) continue;
-            const tag = el.tagName.toLowerCase();
-            const role = el.getAttribute('role');
-            const ariaLabel = el.getAttribute('aria-label') || el.getAttribute('aria-labelledby');
-            let text = '';
-            if (tag === 'input') {
-              text = el.getAttribute('placeholder') || el.getAttribute('name') || '';
-            } else {
-              text = (el.innerText || el.textContent || '').trim().substring(0, 200);
+          const res = { buttons: [], inputs: [], links: [] };
+          if (!include('buttons') && !include('inputs') && !include('links')) return res;
+
+          const buttonSel = 'button, [role="button"], input[type="submit"], input[type="button"]';
+          const inputSel = 'input:not([type="submit"]):not([type="button"]), select, textarea, [role="textbox"], [role="checkbox"], [role="radio"]';
+          const linkSel = 'a[href], [role="link"]';
+
+          if (include('buttons')) {
+            const els = document.querySelectorAll(buttonSel);
+            let i = 0;
+            for (const el of els) {
+              if (i >= maxEl || !isVisible(el)) continue;
+              const ariaLabel = el.getAttribute('aria-label') || el.getAttribute('aria-labelledby');
+              let text = '';
+              if (el.tagName === 'INPUT') {
+                text = el.getAttribute('value') || el.getAttribute('name') || '';
+              } else {
+                text = (el.innerText || el.textContent || '').trim().substring(0, 80);
+              }
+              res.buttons.push({
+                tag: el.tagName.toLowerCase(),
+                role: el.getAttribute('role') || null,
+                ariaLabel: ariaLabel || null,
+                text,
+                selector: shortSelector(el),
+                index: i++,
+                type: el.getAttribute('type') || null,
+                name: el.getAttribute('name') || null,
+                placeholder: el.getAttribute('placeholder') || null
+              });
             }
-            result.push({
-              tag,
-              role: role || null,
-              ariaLabel: ariaLabel || null,
-              text,
-              selector: buildSelector(el),
-              index: index++,
-              type: el.getAttribute('type') || null,
-              name: el.getAttribute('name') || null,
-              placeholder: el.getAttribute('placeholder') || null,
-              visible: true
-            });
           }
-          return result;
+
+          if (include('inputs')) {
+            const els = document.querySelectorAll(inputSel);
+            let i = 0;
+            for (const el of els) {
+              if (i >= maxEl || !isVisible(el)) continue;
+              const ariaLabel = el.getAttribute('aria-label') || el.getAttribute('aria-labelledby');
+              let text = '';
+              if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') {
+                text = el.getAttribute('placeholder') || el.getAttribute('name') || '';
+              } else {
+                text = (el.innerText || el.textContent || '').trim().substring(0, 80);
+              }
+              res.inputs.push({
+                tag: el.tagName.toLowerCase(),
+                role: el.getAttribute('role') || null,
+                ariaLabel: ariaLabel || null,
+                text,
+                selector: shortSelector(el),
+                index: i++,
+                type: el.getAttribute('type') || null,
+                name: el.getAttribute('name') || null,
+                placeholder: el.getAttribute('placeholder') || null
+              });
+            }
+          }
+
+          if (include('links')) {
+            const els = document.querySelectorAll(linkSel);
+            let i = 0;
+            for (const el of els) {
+              if (i >= maxEl || !isVisible(el)) continue;
+              const ariaLabel = el.getAttribute('aria-label') || el.getAttribute('aria-labelledby');
+              const text = (el.innerText || el.textContent || '').trim().substring(0, 80);
+              res.links.push({
+                tag: el.tagName.toLowerCase(),
+                role: el.getAttribute('role') || null,
+                ariaLabel: ariaLabel || null,
+                text,
+                selector: shortSelector(el),
+                index: i++,
+                type: null,
+                name: el.getAttribute('name') || null,
+                placeholder: null
+              });
+            }
+          }
+
+          return res;
         }
 
         function extractHeadings() {
+          if (!include('headings')) return [];
           const headings = document.querySelectorAll('h1, h2, h3, h4, h5, h6');
           const result = [];
+          let i = 0;
           for (const h of headings) {
-            if (!isVisible(h)) continue;
+            if (i >= maxEl || !isVisible(h)) continue;
             result.push({
               level: parseInt(h.tagName.substring(1)),
-              text: (h.innerText || h.textContent || '').trim()
+              text: (h.innerText || h.textContent || '').trim().substring(0, 150)
             });
+            i++;
           }
           return result;
         }
 
         function extractForms() {
+          if (!include('forms')) return [];
           const forms = document.querySelectorAll('form');
           const result = [];
           for (const form of forms) {
@@ -533,17 +596,17 @@ export class MessageHandler {
             const fieldElements = form.querySelectorAll('input, select, textarea, button');
             for (const field of fieldElements) {
               if (!isVisible(field)) continue;
+              const ariaLabel = field.getAttribute('aria-label') || null;
               fields.push({
                 tag: field.tagName.toLowerCase(),
                 role: field.getAttribute('role') || null,
-                ariaLabel: field.getAttribute('aria-label') || null,
-                text: (field.innerText || field.textContent || '').trim().substring(0, 100),
-                selector: buildSelector(field),
-                index: -1,
+                ariaLabel,
+                text: '',
+                selector: shortSelector(field),
+                index: fields.length,
                 type: field.getAttribute('type') || null,
                 name: field.getAttribute('name') || null,
-                placeholder: field.getAttribute('placeholder') || null,
-                visible: true
+                placeholder: field.getAttribute('placeholder') || null
               });
             }
             result.push({
@@ -565,6 +628,12 @@ export class MessageHandler {
     });
 
     const structure = results[0];
+    const allElements = [
+      ...structure.interactiveElements.buttons,
+      ...structure.interactiveElements.inputs,
+      ...structure.interactiveElements.links
+    ];
+
     await this.client.sendResourceToServer({
       resource: "page-structure",
       correlationId,
@@ -572,7 +641,7 @@ export class MessageHandler {
       url: tab.url || "",
       title: tab.title || "",
       headingStructure: structure.headingStructure,
-      interactiveElements: structure.interactiveElements,
+      interactiveElements: allElements,
       forms: structure.forms,
     });
   }

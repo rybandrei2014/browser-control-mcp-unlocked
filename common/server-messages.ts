@@ -85,6 +85,8 @@ export interface PressKeyServerMessage extends ServerMessageBase {
 export interface GetPageStructureServerMessage extends ServerMessageBase {
   cmd: "get-page-structure";
   tabId: number;
+  categories?: ("headings" | "buttons" | "inputs" | "links" | "forms")[];
+  maxElements?: number;
 }
 
 // ================================================================

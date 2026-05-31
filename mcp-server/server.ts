@@ -340,37 +340,49 @@ mcpServer.tool(
 
 mcpServer.tool(
   "get-page-structure",
-  "Analyze the page structure to understand layout, interactive elements, headings, and forms. Use this to 'see' the page and decide which elements to interact with. Returns structured information about buttons, links, inputs, headings hierarchy, and form layouts.",
+  "Analyze the page structure to understand layout, interactive elements, headings, and forms. Use this to 'see' the page and decide which elements to interact with. Use 'categories' to filter what you need and reduce output size. Use 'maxElements' to limit results.",
   {
-    tabId: z.number().describe("Tab ID to analyze")
+    tabId: z.number().describe("Tab ID to analyze"),
+    categories: z.array(z.enum(["headings", "buttons", "inputs", "links", "forms"]))
+      .optional()
+      .describe("Which categories to include. Omit to get all. Examples: ['headings','buttons','inputs'] to skip links and forms"),
+    maxElements: z.number().int().min(1).max(500)
+      .optional()
+      .default(100)
+      .describe("Max elements per category (default: 100). Use lower values to reduce output size")
   },
-  async ({ tabId }) => {
-    const structure = await browserApi.getPageStructure(tabId);
+  async ({ tabId, categories, maxElements }) => {
+    const structure = await browserApi.getPageStructure(tabId, categories, maxElements);
     const parts: string[] = [];
 
     parts.push(`Page: ${structure.title}`);
     parts.push(`URL: ${structure.url}`);
-    parts.push(`\n--- Heading Structure ---`);
-    for (const h of structure.headingStructure) {
-      const indent = "  ".repeat(h.level - 1);
-      parts.push(`${indent}<${h.level}> ${h.text}`);
+
+    if (structure.headingStructure && structure.headingStructure.length > 0) {
+      parts.push(`\n--- Headings (${structure.headingStructure.length}) ---`);
+      for (const h of structure.headingStructure) {
+        const indent = "  ".repeat(h.level - 1);
+        parts.push(`${indent}<${h.level}> ${h.text}`);
+      }
     }
 
-    parts.push(`\n--- Interactive Elements (${structure.interactiveElements.length} total) ---`);
-    for (const el of structure.interactiveElements) {
-      const label = el.ariaLabel || el.text || el.name || el.placeholder || '(no label)';
-      parts.push(`[#${el.index}] <${el.tag}${el.type ? ` type="${el.type}"` : ''}${el.role ? ` role="${el.role}"` : ''}> "${label}"`);
-      if (el.selector) {
-        parts.push(`    selector: ${el.selector}`);
+    if (structure.interactiveElements && structure.interactiveElements.length > 0) {
+      parts.push(`\n--- Interactive Elements (${structure.interactiveElements.length}) ---`);
+      for (const el of structure.interactiveElements) {
+        const label = el.ariaLabel || el.text || el.name || el.placeholder || '';
+        const attrs = [el.type, el.role].filter(Boolean).map(a => `${a}`).join(', ');
+        const attrStr = attrs ? ` [${attrs}]` : '';
+        parts.push(`[#${el.index}] <${el.tag}>${attrStr} ${label}`);
       }
     }
 
     if (structure.forms && structure.forms.length > 0) {
-      parts.push(`\n--- Forms (${structure.forms.length} total) ---`);
+      parts.push(`\n--- Forms (${structure.forms.length}) ---`);
       structure.forms.forEach((form: any, fi: number) => {
-        parts.push(`Form ${fi + 1}: action="${form.action || '(none)'}" method="${form.method || '(none)'}"`);
+        parts.push(`Form ${fi + 1}: action="${form.action || '-'}" method="${form.method || '-'}"`);
         form.fields.forEach((field: any) => {
-          parts.push(`  - <${field.tag}${field.type ? ` type="${field.type}"` : ''}> name="${field.name || '(none)'}" placeholder="${field.placeholder || ''}"`);
+          const label = field.ariaLabel || field.name || field.placeholder || '';
+          parts.push(`  [#${field.index}] <${field.tag}> [${field.type || 'default'}] ${label}`);
         });
       });
     }
