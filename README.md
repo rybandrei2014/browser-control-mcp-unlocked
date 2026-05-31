@@ -37,7 +37,7 @@ The MCP server supports the following tools:
 The MCP server and Firefox extension combo is designed to be more secure than web automation MCP servers, enabling safer use with the user's personal browser.
 
 * ~~It does not support web page modification, page interactions, or arbitrary scripting.~~
-* Reading webpage content requires the user's explicit consent in the browser for each domain. This is enforced at the extension's manifest level.
+* ~~Reading webpage content requires the user's explicit consent in the browser for each domain. This is enforced at the extension's manifest level.~~
 * It uses a local-only connection with a shared secret between the MCP server and extension.
 * No remote data collection or tracking.
 * It provides an extension-side audit log for tool calls and tool enable/disable configuration.
