@@ -1,13 +1,17 @@
 {
     "manifest_version": 2,
-    "name": "Browser Control MCP",
-    "version": "1.5.0",
+    "name": "Browser Control MCP Full",
+    "version": "0.0.1",
     "description": "An extension that allows a local MCP server to perform actions on the browser.",
     "permissions": [
         "tabs",
         "tabGroups",
         "history",
-        "storage"
+        "storage",
+        "scripting"
+    ],
+    "host_permissions": [
+      "<all_urls>"
     ],
     "optional_permissions": [
         "*://*/*",
@@ -16,6 +20,13 @@
     "background": {
       "scripts": ["dist/background.js"]
     },
+    "content_scripts": [
+      {
+        "matches": ["<all_urls>"],
+        "js": ["dist/content-script.js"],
+        "run_at": "document_idle"
+      }
+    ],
     "options_ui": {
       "page": "options.html"
     }

@@ -10,6 +10,7 @@ export interface TabContentExtensionMessage extends ExtensionMessageBase {
   isTruncated: boolean;
   totalLength: number;
   links: { url: string; text: string }[];
+  ariaLabels?: string;
 }
 
 export interface BrowserTab {
@@ -60,6 +61,11 @@ export interface TabGroupCreatedExtensionMessage extends ExtensionMessageBase {
   groupId: number;
 }
 
+export interface PageActionExtensionMessage extends ExtensionMessageBase {
+  resource: "page-action-result";
+  result: any;
+}
+
 export type ExtensionMessage =
   | TabContentExtensionMessage
   | TabsExtensionMessage
@@ -68,7 +74,8 @@ export type ExtensionMessage =
   | ReorderedTabsExtensionMessage
   | FindHighlightExtensionMessage
   | TabsClosedExtensionMessage
-  | TabGroupCreatedExtensionMessage;
+  | TabGroupCreatedExtensionMessage
+  | PageActionExtensionMessage;
 
 export interface ExtensionError {
   correlationId: string;

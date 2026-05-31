@@ -54,6 +54,50 @@ export class MessageHandler {
           req.groupTitle
         );
         break;
+      case "click":
+        await this.clickElement(
+          req.correlationId,
+          req.selector,
+          req.text,
+          req.tabId
+        );
+        break;
+
+      case "type":
+        await this.typeText(
+          req.correlationId,
+          req.selector,
+          req.text,
+          req.tabId
+        );
+        break;
+
+      case "scroll":
+        await this.scrollPage(
+          req.correlationId,
+          req.x,
+          req.y,
+          req.tabId
+        );
+        break;
+
+      case "set-file-input":
+        await this.setFileInput(
+          req.correlationId,
+          req.selector,
+          req.filename,
+          req.content,
+          req.mimeType,
+          req.tabId
+        );
+        break;
+      case "press-key":
+        await this.pressKey(
+          req.correlationId,
+          req.key,
+          req.tabId
+        );
+        break;
       default:
         const _exhaustiveCheck: never = req;
         console.error("Invalid message received:", req);
@@ -66,7 +110,7 @@ export class MessageHandler {
     if ("url" in req && req.url) {
       contextUrl = req.url;
     }
-    if ("tabId" in req) {
+    if ("tabId" in req && req.tabId !== undefined) {
       try {
         const tab = await browser.tabs.get(req.tabId);
         contextUrl = tab.url;
@@ -228,18 +272,31 @@ export class MessageHandler {
           }
         }
 
+        function getAriaLabels() {
+          const elements = document.querySelectorAll('[aria-label]');
+          const labels = [];
+          for (const el of elements) {
+            const tag = el.tagName.toLowerCase();
+            if (tag === 'button' || tag === 'a' || tag === 'input' || el.getAttribute('role') === 'button') {
+              labels.push('[' + tag + '] aria-label="' + el.getAttribute('aria-label') + '"');
+            }
+          }
+          return labels.join('\\n');
+        }
+
         const textContent = getTextContent();
 
         return {
           links: getLinks(),
           fullText: textContent.text,
           isTruncated: textContent.isTruncated,
-          totalLength: document.body.innerText.length
+          totalLength: document.body.innerText.length,
+          ariaLabels: getAriaLabels()
         };
       })();
     `,
     });
-    const { isTruncated, fullText, links, totalLength } = results[0];
+    const { isTruncated, fullText, links, totalLength, ariaLabels } = results[0];
     await this.client.sendResourceToServer({
       resource: "tab-content",
       tabId,
@@ -248,6 +305,7 @@ export class MessageHandler {
       fullText,
       links,
       totalLength,
+      ariaLabels,
     });
   }
 
@@ -324,5 +382,97 @@ export class MessageHandler {
       correlationId,
       groupId: tabGroup.id,
     });
+  }
+
+  private async executePageAction(
+    correlationId: string,
+    tabId: number | undefined,
+    action: any
+  ): Promise<void> {
+    if (!tabId) {
+      tabId = (await browser.tabs.query({ active: true, currentWindow: true }))[0].id!;
+    }
+
+    try {
+      const response = await browser.tabs.sendMessage(tabId, {
+        type: "EXECUTE_ACTION",
+        action: action
+      });
+
+      await this.client.sendSuccess(correlationId, response);
+    } catch (error) {
+      await this.client.sendErrorToServer(correlationId, `Page action failed: ${error}`);
+    }
+  }
+
+  // Click on element
+  private async clickElement(correlationId: string, selector?: string, text?: string, tabId?: number) {
+    await this.executePageAction(correlationId, tabId, {
+      type: "CLICK",
+      selector,
+      text
+    });
+  }
+
+  // Type into input field
+  private async typeText(correlationId: string, selector: string, text: string, tabId?: number) {
+    await this.executePageAction(correlationId, tabId, {
+      type: "TYPE",
+      selector,
+      text
+    });
+  }
+
+  // Scroll the page
+  private async scrollPage(correlationId: string, x: number = 0, y: number = 300, tabId?: number) {
+    await this.executePageAction(correlationId, tabId, {
+      type: "SCROLL",
+      x,
+      y
+    });
+  }
+
+  private async setFileInput(
+    correlationId: string,
+    selector: string,
+    filename: string,
+    content: string,
+    mimeType?: string,
+    tabId?: number
+  ) {
+    await this.executePageAction(correlationId, tabId, {
+      type: "SET_FILE_INPUT",
+      selector,
+      filename,
+      content,
+      mimeType: mimeType || "application/octet-stream"
+    });
+  }
+
+private async pressKey(
+    correlationId: string,
+    key: string,
+    tabId?: number
+  ) {
+    if (!tabId) {
+      tabId = (await browser.tabs.query({ active: true, currentWindow: true }))[0].id!;
+    }
+
+    await this.checkForUrlPermission(
+      (await browser.tabs.get(tabId)).url
+    );
+
+    await browser.tabs.executeScript(tabId, {
+      code: `
+        (function() {
+          const keydown = new KeyboardEvent('keydown', { key: '${key}', bubbles: true, cancelable: true });
+          const keyup = new KeyboardEvent('keyup', { key: '${key}', bubbles: true, cancelable: true });
+          document.dispatchEvent(keydown);
+          document.dispatchEvent(keyup);
+        })();
+      `,
+    });
+
+   await this.client.sendSuccess(correlationId, { success: true, key });
   }
 }

@@ -3,7 +3,7 @@
   "version": "1.5.0",
   "main": "dist/background.js",
   "scripts": {
-    "build": "esbuild background.ts --bundle --outfile=dist/background.js && esbuild options.ts --bundle --outfile=dist/options.js",
+    "build": "esbuild background.ts --bundle --outfile=dist/background.js && esbuild options.ts --bundle --outfile=dist/options.js && esbuild content-scripts.ts --bundle --outfile=dist/content-script.js",
     "test": "jest"
   },
   "license": "MIT",

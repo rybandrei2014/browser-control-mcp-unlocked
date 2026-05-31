@@ -122,6 +122,22 @@ export class WebsocketClient {
     this.socket.send(JSON.stringify(extensionError));
   }
 
+  public async sendSuccess(
+    correlationId: string,
+    result: any
+  ): Promise<void> {
+    if (!this.socket || this.socket.readyState !== WebSocket.OPEN) {
+      console.error("Socket is not open");
+      return;
+    }
+    const message: ExtensionMessage = {
+      resource: "page-action-result",
+      correlationId,
+      result,
+    };
+    await this.sendResourceToServer(message);
+  }
+
   public disconnect(): void {
     if (this.reconnectTimer !== null) {
       window.clearInterval(this.reconnectTimer);

@@ -175,6 +175,83 @@ export class BrowserAPI {
     return message.groupId;
   }
 
+  /**
+   * Click an element on the page
+   */
+  async click(selector?: string, text?: string, tabId?: number): Promise<any> {
+    const correlationId = this.sendMessageToExtension({
+      cmd: "click",
+      selector,
+      text,
+      tabId
+    });
+    const message = await this.waitForResponse(correlationId, "page-action-result");
+    return message.result;
+  }
+
+  /**
+   * Type text into an input field
+   */
+  async type(selector: string, text: string, tabId?: number): Promise<any> {
+    const correlationId = this.sendMessageToExtension({
+      cmd: "type",
+      selector,
+      text,
+      tabId
+    });
+    const message = await this.waitForResponse(correlationId, "page-action-result");
+    return message.result;
+  }
+
+  /**
+   * Scroll the page
+   */
+  async scroll(x: number = 0, y: number = 300, tabId?: number): Promise<any> {
+    const correlationId = this.sendMessageToExtension({
+      cmd: "scroll",
+      x,
+      y,
+      tabId
+    });
+    const message = await this.waitForResponse(correlationId, "page-action-result");
+    return message.result;
+  }
+
+  /**
+   * Set a file on a file input element
+   */
+  async setFileInput(
+    selector: string,
+    filename: string,
+    content: string,
+    mimeType?: string,
+    tabId?: number
+  ): Promise<any> {
+    const correlationId = this.sendMessageToExtension({
+      cmd: "set-file-input",
+      selector,
+      filename,
+      content,
+      mimeType,
+      tabId
+    });
+    const message = await this.waitForResponse(correlationId, "page-action-result");
+    return message.result;
+  }
+
+  /**
+   * Press a key in the browser
+   */
+  async pressKey(key: string, tabId?: number): Promise<any> {
+    const correlationId = this.sendMessageToExtension({
+      cmd: "press-key",
+      key,
+      tabId
+    });
+    const message = await this.waitForResponse(correlationId, "page-action-result");
+    return message.result;
+  }
+
   private createSignature(payload: string): string {
     if (!this.sharedSecret) {
       throw new Error("Shared secret not initialized");

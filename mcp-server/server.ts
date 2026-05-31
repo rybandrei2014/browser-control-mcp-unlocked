@@ -157,6 +157,10 @@ mcpServer.tool(
       ];
     }
 
+    if (content.ariaLabels && content.ariaLabels.length > 0) {
+      text += `\n\n--- Interactive Elements with aria-label ---\n${content.ariaLabels}`;
+    }
+
     return {
       content: [...hint, { type: "text", text }, ...links],
     };
@@ -229,6 +233,107 @@ mcpServer.tool(
           text: `Created tab group "${groupTitle}" with ${tabIds.length} tabs (group ID: ${groupId})`,
         },
       ],
+    };
+  }
+);
+
+mcpServer.tool(
+  "browser_click",
+  "Click on an element in the browser page",
+  {
+    selector: z.string().optional().describe("CSS selector of the element to click"),
+    text: z.string().optional().describe("Click element containing this visible text (alternative to selector)"),
+    tabId: z.number().optional().describe("Specific tab ID (uses active tab if not provided)")
+  },
+  async ({ selector, text, tabId }) => {
+    const result = await browserApi.click(selector, text, tabId);
+    return {
+      content: [{ type: "text", text: JSON.stringify(result, null, 2) }]
+    };
+  }
+);
+
+mcpServer.tool(
+  "browser_type",
+  "Type text into an input field",
+  {
+    selector: z.string().describe("CSS selector of the input/textarea"),
+    text: z.string().describe("Text to type"),
+    tabId: z.number().optional()
+  },
+  async ({ selector, text, tabId }) => {
+    const result = await browserApi.type(selector, text, tabId);
+    return {
+      content: [{ type: "text", text: JSON.stringify(result, null, 2) }]
+    };
+  }
+);
+
+mcpServer.tool(
+  "browser_scroll",
+  "Scroll the current page",
+  {
+    x: z.number().optional().default(0).describe("Horizontal scroll amount in pixels"),
+    y: z.number().optional().default(300).describe("Vertical scroll amount in pixels"),
+    tabId: z.number().optional()
+  },
+  async ({ x, y, tabId }) => {
+    const result = await browserApi.scroll(x, y, tabId);
+    return {
+      content: [{ type: "text", text: `Scrolled by (${x}, ${y})` }]
+    };
+  }
+);
+
+mcpServer.tool(
+  "browser_set_file_input",
+  "Set a file on a file input element, bypassing the native file picker dialog. Provide either inline text content or a local file path.",
+  {
+    selector: z.string().describe("CSS selector for the <input type='file'> element"),
+    filename: z.string().describe("Name to use for the file (e.g., 'document.pdf')"),
+    content: z.string().optional().describe("Inline text content to place in the file"),
+    localPath: z.string().optional().describe("Absolute path to a local file to upload"),
+    mimeType: z.string().optional().describe("MIME type of the file (default: application/octet-stream)"),
+    tabId: z.number().optional().describe("Specific tab ID (uses active tab if not provided)")
+  },
+  async ({ selector, filename, content, localPath, mimeType, tabId }) => {
+    if (!content && !localPath) {
+      return {
+        content: [{ type: "text", text: "Either 'content' or 'localPath' must be provided", isError: true }]
+      };
+    }
+
+    let fileContent: string;
+    if (content) {
+      fileContent = content;
+    } else if (localPath) {
+      const fs = await import("fs/promises");
+      const fileBuffer = await fs.readFile(localPath);
+      fileContent = fileBuffer.toString("base64");
+    } else {
+      return {
+        content: [{ type: "text", text: "Either 'content' or 'localPath' must be provided", isError: true }]
+      };
+    }
+
+    const result = await browserApi.setFileInput(selector, filename, fileContent, mimeType, tabId);
+    return {
+      content: [{ type: "text", text: JSON.stringify(result, null, 2) }]
+    };
+  }
+);
+
+mcpServer.tool(
+  "browser_press_key",
+  "Press a keyboard key in the browser. Useful for closing modals (Escape), navigating (Tab, Arrow keys), or triggering shortcuts.",
+  {
+    key: z.string().describe("Key to press (e.g., 'Escape', 'Tab', 'Enter', 'ArrowDown')"),
+    tabId: z.number().optional().describe("Specific tab ID (uses active tab if not provided)")
+  },
+  async ({ key, tabId }) => {
+    const result = await browserApi.pressKey(key, tabId);
+    return {
+      content: [{ type: "text", text: JSON.stringify(result, null, 2) }]
     };
   }
 );

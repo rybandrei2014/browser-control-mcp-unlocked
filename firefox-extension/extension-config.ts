@@ -49,10 +49,29 @@ export const AVAILABLE_TOOLS: ToolInfo[] = [
     id: "find-highlight-in-browser-tab",
     name: "Find and Highlight in Browser Tab",
     description: "Allows the MCP server to search for and highlight text in web pages"
+  },
+  {
+    id: "browser-click",
+    name: "Browser Click",
+    description: "Allows the MCP server to click elements on web pages"
+  },
+  {
+    id: "browser-type",
+    name: "Browser Type",
+    description: "Allows the MCP server to type text into input fields"
+  },
+  {
+    id: "browser-scroll",
+    name: "Browser Scroll",
+    description: "Allows the MCP server to scroll web pages"
+  },
+  {
+    id: "browser-set-file-input",
+    name: "Browser Set File Input",
+    description: "Allows the MCP server to set files on file input elements"
   }
 ];
 
-// Map command names to tool IDs
 export const COMMAND_TO_TOOL_ID: Record<ServerMessageRequest["cmd"], string> = {
   "open-tab": "open-browser-tab",
   "close-tabs": "close-browser-tabs",
@@ -62,6 +81,10 @@ export const COMMAND_TO_TOOL_ID: Record<ServerMessageRequest["cmd"], string> = {
   "reorder-tabs": "reorder-browser-tabs",
   "find-highlight": "find-highlight-in-browser-tab",
   "group-tabs": "reorder-browser-tabs",
+  "click": "browser-click",
+  "type": "browser-type",
+  "scroll": "browser-scroll",
+  "set-file-input": "browser-set-file-input",
 };
 
 // Storage schema for tool settings
