@@ -66,6 +66,29 @@ export interface PageActionExtensionMessage extends ExtensionMessageBase {
   result: any;
 }
 
+export interface InteractiveElement {
+  tag: string;
+  role: string | null;
+  ariaLabel: string | null;
+  text: string;
+  selector: string;
+  index: number;
+  type: string | null;
+  name: string | null;
+  placeholder: string | null;
+  visible: boolean;
+}
+
+export interface PageStructureExtensionMessage extends ExtensionMessageBase {
+  resource: "page-structure";
+  tabId: number;
+  url: string;
+  title: string;
+  headingStructure: { level: number; text: string }[];
+  interactiveElements: InteractiveElement[];
+  forms: { action: string | null; method: string | null; fields: InteractiveElement[] }[];
+}
+
 export type ExtensionMessage =
   | TabContentExtensionMessage
   | TabsExtensionMessage
@@ -75,7 +98,8 @@ export type ExtensionMessage =
   | FindHighlightExtensionMessage
   | TabsClosedExtensionMessage
   | TabGroupCreatedExtensionMessage
-  | PageActionExtensionMessage;
+  | PageActionExtensionMessage
+  | PageStructureExtensionMessage;
 
 export interface ExtensionError {
   correlationId: string;

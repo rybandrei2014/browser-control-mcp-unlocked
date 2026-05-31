@@ -338,6 +338,49 @@ mcpServer.tool(
   }
 );
 
+mcpServer.tool(
+  "get-page-structure",
+  "Analyze the page structure to understand layout, interactive elements, headings, and forms. Use this to 'see' the page and decide which elements to interact with. Returns structured information about buttons, links, inputs, headings hierarchy, and form layouts.",
+  {
+    tabId: z.number().describe("Tab ID to analyze")
+  },
+  async ({ tabId }) => {
+    const structure = await browserApi.getPageStructure(tabId);
+    const parts: string[] = [];
+
+    parts.push(`Page: ${structure.title}`);
+    parts.push(`URL: ${structure.url}`);
+    parts.push(`\n--- Heading Structure ---`);
+    for (const h of structure.headingStructure) {
+      const indent = "  ".repeat(h.level - 1);
+      parts.push(`${indent}<${h.level}> ${h.text}`);
+    }
+
+    parts.push(`\n--- Interactive Elements (${structure.interactiveElements.length} total) ---`);
+    for (const el of structure.interactiveElements) {
+      const label = el.ariaLabel || el.text || el.name || el.placeholder || '(no label)';
+      parts.push(`[#${el.index}] <${el.tag}${el.type ? ` type="${el.type}"` : ''}${el.role ? ` role="${el.role}"` : ''}> "${label}"`);
+      if (el.selector) {
+        parts.push(`    selector: ${el.selector}`);
+      }
+    }
+
+    if (structure.forms && structure.forms.length > 0) {
+      parts.push(`\n--- Forms (${structure.forms.length} total) ---`);
+      structure.forms.forEach((form: any, fi: number) => {
+        parts.push(`Form ${fi + 1}: action="${form.action || '(none)'}" method="${form.method || '(none)'}"`);
+        form.fields.forEach((field: any) => {
+          parts.push(`  - <${field.tag}${field.type ? ` type="${field.type}"` : ''}> name="${field.name || '(none)'}" placeholder="${field.placeholder || ''}"`);
+        });
+      });
+    }
+
+    return {
+      content: [{ type: "text", text: parts.join("\n") }]
+    };
+  }
+);
+
 const browserApi = new BrowserAPI();
 browserApi.init().catch((err) => {
   console.error("Browser API init error", err);

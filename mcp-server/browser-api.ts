@@ -252,6 +252,17 @@ export class BrowserAPI {
     return message.result;
   }
 
+  /**
+   * Get structured page analysis for AI decision-making
+   */
+  async getPageStructure(tabId: number): Promise<any> {
+    const correlationId = this.sendMessageToExtension({
+      cmd: "get-page-structure",
+      tabId
+    });
+    return await this.waitForResponse(correlationId, "page-structure");
+  }
+
   private createSignature(payload: string): string {
     if (!this.sharedSecret) {
       throw new Error("Shared secret not initialized");

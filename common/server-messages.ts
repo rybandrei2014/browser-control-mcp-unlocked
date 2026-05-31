@@ -82,6 +82,11 @@ export interface PressKeyServerMessage extends ServerMessageBase {
   tabId?: number;
 }
 
+export interface GetPageStructureServerMessage extends ServerMessageBase {
+  cmd: "get-page-structure";
+  tabId: number;
+}
+
 // ================================================================
 
 export type ServerMessage =
@@ -97,6 +102,7 @@ export type ServerMessage =
   | TypeTextServerMessage          // ← New
   | ScrollPageServerMessage        // ← New
   | SetFileInputServerMessage      // ← New
-  | PressKeyServerMessage;         // ← New
+  | PressKeyServerMessage          // ← New
+  | GetPageStructureServerMessage; // ← New
 
 export type ServerMessageRequest = ServerMessage & { correlationId: string };

@@ -69,6 +69,16 @@ export const AVAILABLE_TOOLS: ToolInfo[] = [
     id: "browser-set-file-input",
     name: "Browser Set File Input",
     description: "Allows the MCP server to set files on file input elements"
+  },
+  {
+    id: "browser-press-key",
+    name: "Browser Press Key",
+    description: "Allows the MCP server to press keyboard keys"
+  },
+  {
+    id: "get-page-structure",
+    name: "Get Page Structure",
+    description: "Allows the MCP server to analyze page structure, interactive elements, and forms"
   }
 ];
 
@@ -85,6 +95,8 @@ export const COMMAND_TO_TOOL_ID: Record<ServerMessageRequest["cmd"], string> = {
   "type": "browser-type",
   "scroll": "browser-scroll",
   "set-file-input": "browser-set-file-input",
+  "press-key": "browser-press-key",
+  "get-page-structure": "get-page-structure",
 };
 
 // Storage schema for tool settings

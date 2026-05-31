@@ -98,6 +98,12 @@ export class MessageHandler {
           req.tabId
         );
         break;
+      case "get-page-structure":
+        await this.getPageStructure(
+          req.correlationId,
+          req.tabId
+        );
+        break;
       default:
         const _exhaustiveCheck: never = req;
         console.error("Invalid message received:", req);
@@ -401,7 +407,7 @@ export class MessageHandler {
     });
   }
 
-private async pressKey(
+  private async pressKey(
     correlationId: string,
     key: string,
     tabId?: number
@@ -422,5 +428,152 @@ private async pressKey(
     });
 
    await this.client.sendSuccess(correlationId, { success: true, key });
+  }
+
+  private async getPageStructure(correlationId: string, tabId: number) {
+    const tab = await browser.tabs.get(tabId);
+    if (tab.url && (await isDomainInDenyList(tab.url))) {
+      throw new Error(`Domain in tab URL is in the deny list`);
+    }
+
+    if (tab.url) {
+      const hostname = new URL(tab.url).hostname;
+      const hasPermission = await browser.permissions.contains({
+        origins: [`*://${hostname}/*`]
+      });
+      if (!hasPermission) {
+        const granted = await browser.permissions.request({
+          origins: [`*://${hostname}/*`]
+        });
+        if (!granted) {
+          throw new Error(`Permission denied to access ${hostname}. Please grant permission in the browser prompt.`);
+        }
+      }
+    }
+
+    const results = await browser.tabs.executeScript(tabId, {
+      code: `
+      (function() {
+        function buildSelector(el) {
+          if (!el || !el.parentElement) return '';
+          if (el.id) return '#' + el.id;
+          let path = el.tagName.toLowerCase();
+          if (el.className && typeof el.className === 'string') {
+            const classes = el.className.trim().split(/\\s+/).filter(c => c && !c.startsWith('styled__') && !c.startsWith('css-'));
+            if (classes.length > 0 && classes.length <= 3) {
+              path += '.' + classes.join('.');
+            }
+          }
+          const parent = el.parentElement;
+          if (!parent) return path;
+          const siblings = Array.from(parent.children).filter(c => c.tagName === el.tagName);
+          if (siblings.length > 1) {
+            const idx = siblings.indexOf(el) + 1;
+            path += ':nth-of-type(' + idx + ')';
+          }
+          const parentSelector = buildSelector(parent);
+          return parentSelector ? parentSelector + ' > ' + path : path;
+        }
+
+        function isVisible(el) {
+          const style = window.getComputedStyle(el);
+          return style.display !== 'none' && style.visibility !== 'hidden' && style.opacity !== '0' && el.offsetWidth > 0 && el.offsetHeight > 0;
+        }
+
+        function extractInteractiveElements() {
+          const selectors = 'button, a[href], input, select, textarea, [role="button"], [role="link"], [role="textbox"], [role="checkbox"], [role="radio"], [role="menuitem"], [role="tab"], [role="option"]';
+          const elements = document.querySelectorAll(selectors);
+          const result = [];
+          let index = 0;
+          for (const el of elements) {
+            if (!isVisible(el)) continue;
+            const tag = el.tagName.toLowerCase();
+            const role = el.getAttribute('role');
+            const ariaLabel = el.getAttribute('aria-label') || el.getAttribute('aria-labelledby');
+            let text = '';
+            if (tag === 'input') {
+              text = el.getAttribute('placeholder') || el.getAttribute('name') || '';
+            } else {
+              text = (el.innerText || el.textContent || '').trim().substring(0, 200);
+            }
+            result.push({
+              tag,
+              role: role || null,
+              ariaLabel: ariaLabel || null,
+              text,
+              selector: buildSelector(el),
+              index: index++,
+              type: el.getAttribute('type') || null,
+              name: el.getAttribute('name') || null,
+              placeholder: el.getAttribute('placeholder') || null,
+              visible: true
+            });
+          }
+          return result;
+        }
+
+        function extractHeadings() {
+          const headings = document.querySelectorAll('h1, h2, h3, h4, h5, h6');
+          const result = [];
+          for (const h of headings) {
+            if (!isVisible(h)) continue;
+            result.push({
+              level: parseInt(h.tagName.substring(1)),
+              text: (h.innerText || h.textContent || '').trim()
+            });
+          }
+          return result;
+        }
+
+        function extractForms() {
+          const forms = document.querySelectorAll('form');
+          const result = [];
+          for (const form of forms) {
+            const fields = [];
+            const fieldElements = form.querySelectorAll('input, select, textarea, button');
+            for (const field of fieldElements) {
+              if (!isVisible(field)) continue;
+              fields.push({
+                tag: field.tagName.toLowerCase(),
+                role: field.getAttribute('role') || null,
+                ariaLabel: field.getAttribute('aria-label') || null,
+                text: (field.innerText || field.textContent || '').trim().substring(0, 100),
+                selector: buildSelector(field),
+                index: -1,
+                type: field.getAttribute('type') || null,
+                name: field.getAttribute('name') || null,
+                placeholder: field.getAttribute('placeholder') || null,
+                visible: true
+              });
+            }
+            result.push({
+              action: form.getAttribute('action') || null,
+              method: form.getAttribute('method') || null,
+              fields
+            });
+          }
+          return result;
+        }
+
+        return {
+          headingStructure: extractHeadings(),
+          interactiveElements: extractInteractiveElements(),
+          forms: extractForms()
+        };
+      })();
+      `,
+    });
+
+    const structure = results[0];
+    await this.client.sendResourceToServer({
+      resource: "page-structure",
+      correlationId,
+      tabId,
+      url: tab.url || "",
+      title: tab.title || "",
+      headingStructure: structure.headingStructure,
+      interactiveElements: structure.interactiveElements,
+      forms: structure.forms,
+    });
   }
 }
